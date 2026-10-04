@@ -1,0 +1,18 @@
+services:
+  taskflow:
+    build:
+      context: .
+    image: taskflow:latest
+    container_name: taskflow
+    ports:
+      - '3000:3000'
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DB_FILE: /app/data/taskflow.db
+    volumes:
+      - taskflow-data:/app/data
+    restart: unless-stopped
+
+volumes:
+  taskflow-data:
