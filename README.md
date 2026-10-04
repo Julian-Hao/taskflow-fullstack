@@ -51,7 +51,7 @@
 - 请求参数用 Zod 声明式校验，错误响应格式统一
 - Vitest 单元测试 + API 集成测试（内存 SQLite，互不污染）
 - ESLint + Prettier，GitHub Actions 持续集成
-- 多阶段构建的 Docker 镜像，含健康检查
+- 多阶段构建的 Docker 镜像，以非 root 用户运行并内置健康检查（**未经实测**，见 [Docker 部署](#docker-部署)）
 
 ## 技术栈
 
@@ -120,8 +120,21 @@ npm run dev
 
 打开 <http://localhost:5173> 即可。开发模式下 Vite 会把 `/api` 请求代理到后端。
 
-> **注意**：请勿把项目放在 FAT32 / exFAT 格式的磁盘上开发。这类文件系统不支持符号链接，
-> 而 npm 需要在 `node_modules/.bin` 下创建符号链接，会导致依赖安装失败。
+> **⚠️ 不要把项目放在 FAT32 / exFAT 格式的磁盘上开发。**
+>
+> 这类文件系统不支持符号链接，而 npm 需要在 `node_modules/.bin/` 下为每个可执行文件创建符号链接。
+> 在这类分区上执行 `npm install` 会直接失败，典型报错如下：
+>
+> ```text
+> npm ERR! code ENOENT
+> npm ERR! syscall rename
+> npm ERR! path /path/to/taskflow/node_modules/.bin/acorn
+> npm ERR! errno -2
+> npm ERR! ENOENT: no such file or directory, rename
+> ```
+>
+> 请把项目放在支持符号链接的分区上：macOS 内置磁盘（APFS）、Linux 的 ext4，或 Windows 的 NTFS。
+> 外接 U 盘与移动硬盘出厂常见 FAT32 / exFAT，需要先重新格式化再使用。
 
 ### 生产模式（单端口）
 
@@ -272,6 +285,18 @@ npm run test:coverage # 覆盖率报告
 服务端测试跑在 `:memory:` SQLite 上（见 `vitest.config.ts`），每个用例前清库，因此可重复执行且互不干扰。
 
 ## Docker 部署
+
+> **⚠️ 未经实测**：编写时开发环境未安装 Docker，因此 `Dockerfile` 与 `docker-compose.yml`
+> **没有经过实际构建与运行验证**，配置仅按多阶段构建的常规做法编写。首次构建若遇问题，
+> 优先排查以下两点：
+>
+> - **原生模块编译**：`better-sqlite3` 依赖预编译二进制包（`prebuild-install`）。若目标平台没有
+>   对应的预编译产物，运行阶段的 `npm ci --omit=dev` 会退化为本地编译，而运行阶段镜像**未安装**
+>   `python3 / make / g++`。此时需把构建阶段安装工具链的那几行复制到运行阶段，或改用已装好
+>   工具链的基础镜像。
+> - **数据目录权限**：镜像内以非 root 用户 `node`（uid 1000）运行，`/app/data` 已 `chown` 给该用户。
+>   使用命名卷 `taskflow-data` 时会自动继承属主；但若改为挂载宿主机目录，需自行确保该目录
+>   对 uid 1000 可写，否则 SQLite 会因无法创建数据库文件而启动失败。
 
 ```bash
 # 构建并启动

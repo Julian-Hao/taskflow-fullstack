@@ -30,8 +30,12 @@ RUN npm ci --omit=dev && npm cache clean --force
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/dist-server ./dist-server
 
-RUN mkdir -p /app/data
+# 数据目录交给非 root 用户，命名卷首次创建时会继承该属主
+RUN mkdir -p /app/data && chown -R node:node /app/data
 VOLUME ["/app/data"]
+
+# 不以 root 运行（node:22-slim 内置 uid 1000 的 node 用户）
+USER node
 
 EXPOSE 3000
 
